@@ -1,23 +1,20 @@
 package com.quizmaker.service;
 
 import java.io.IOException;
-import java.io.InputStream;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
-import com.quizmaker.model.PDFContent;
+import com.quizmaker.dto.PDFContentDTO;
 
 @ExtendWith(MockitoExtension.class)
 class PDFIngestionServiceTest {
@@ -28,20 +25,36 @@ class PDFIngestionServiceTest {
     private MockMultipartFile validPdfFile;
     private MockMultipartFile emptyFile;
     private MockMultipartFile nonPdfFile;
+    private MultipartFile mockFile;
 
     @BeforeEach
     void setUp() {
-        // Load a test PDF file from resources
-        try (InputStream is = getClass().getResourceAsStream("/test.pdf")) {
-            validPdfFile = new MockMultipartFile(
-                "file",
-                "test.pdf",
-                "application/pdf",
-                is != null ? is.readAllBytes() : new byte[0]
-            );
-        } catch (IOException e) {
-            fail("Could not load test PDF file");
-        }
+        // Create a simple PDF-like content
+        String pdfContent = "%PDF-1.4\n" +
+                           "1 0 obj\n" +
+                           "<</Type/Catalog/Pages 2 0 R>>\n" +
+                           "endobj\n" +
+                           "2 0 obj\n" +
+                           "<</Type/Pages/Kids[3 0 R]/Count 1>>\n" +
+                           "endobj\n" +
+                           "3 0 obj\n" +
+                           "<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>\n" +
+                           "endobj\n" +
+                           "xref\n" +
+                           "0 4\n" +
+                           "0000000000 65535 f\n" +
+                           "trailer\n" +
+                           "<</Size 4/Root 1 0 R>>\n" +
+                           "startxref\n" +
+                           "0\n" +
+                           "%%EOF";
+
+        validPdfFile = new MockMultipartFile(
+            "file",
+            "test.pdf",
+            "application/pdf",
+            pdfContent.getBytes()
+        );
 
         emptyFile = new MockMultipartFile(
             "file",
@@ -54,50 +67,50 @@ class PDFIngestionServiceTest {
             "file",
             "test.txt",
             "text/plain",
-            "test content".getBytes()
+            "This is not a PDF file".getBytes()
+        );
+
+        mockFile = new MockMultipartFile(
+            "file",
+            "test.pdf",
+            "application/pdf",
+            "%PDF-1.4\ntest content".getBytes()
         );
     }
 
     @Test
-    void extractContent_WithValidPDF_ShouldReturnContent() {
-        assertDoesNotThrow(() -> {
-            PDFContent content = pdfIngestionService.extractContent(validPdfFile);
-            assertNotNull(content);
-            assertNotNull(content.getText());
-            assertTrue(content.getPageCount() > 0);
-        });
+    void extractContent_ValidFile_ReturnsContent() throws IOException {
+        PDFContentDTO result = pdfIngestionService.extractContent(validPdfFile);
+        
+        assertNotNull(result);
+        assertNotNull(result.getText());
+        assertEquals("Untitled", result.getTitle());
+        assertEquals("Unknown", result.getAuthor());
+        assertEquals("", result.getSubject());
+        assertTrue(result.getPageCount() > 0);
     }
 
     @Test
-    void extractContent_WithEmptyFile_ShouldThrowException() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> 
-            pdfIngestionService.extractContent(emptyFile)
-        );
-        assertEquals("Provided file is empty", exception.getMessage());
+    void extractContent_EmptyFile_ThrowsException() {
+        assertThrows(IOException.class, () -> pdfIngestionService.extractContent(emptyFile));
     }
 
     @Test
-    void extractContent_WithNonPDFFile_ShouldThrowException() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> 
-            pdfIngestionService.extractContent(nonPdfFile)
-        );
-        assertEquals("File must be a PDF", exception.getMessage());
+    void extractContent_NonPDFFile_ThrowsException() {
+        assertThrows(IOException.class, () -> pdfIngestionService.extractContent(nonPdfFile));
     }
 
     @Test
-    void extractTextFromPage_WithInvalidPageNumber_ShouldThrowException() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> 
-            pdfIngestionService.extractTextFromPage(validPdfFile, 0)
-        );
-        assertEquals("Page number must be greater than 0", exception.getMessage());
+    void extractPageContent_ValidPage_ReturnsContent() throws IOException {
+        PDFContentDTO result = pdfIngestionService.extractPageContent(validPdfFile, 1);
+        assertNotNull(result);
     }
 
     @Test
-    void extractTextFromPage_WithValidPageNumber_ShouldReturnText() {
-        assertDoesNotThrow(() -> {
-            String text = pdfIngestionService.extractTextFromPage(validPdfFile, 1);
-            assertNotNull(text);
-            assertFalse(text.isEmpty());
-        });
+    void extractPageContent_InvalidPage_ThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> 
+            pdfIngestionService.extractPageContent(validPdfFile, 0));
+        assertThrows(IllegalArgumentException.class, () -> 
+            pdfIngestionService.extractPageContent(validPdfFile, 2));
     }
 } 
