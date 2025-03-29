@@ -18,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/pdf")
+@RequestMapping("/api/pdf")
 public class PDFController {
 
     private final PDFIngestionService pdfIngestionService;

@@ -1,12 +1,17 @@
 package com.quizmaker.service;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,6 +31,7 @@ class PDFIngestionServiceTest {
     private MockMultipartFile emptyFile;
     private MockMultipartFile nonPdfFile;
     private MultipartFile mockFile;
+    private static final String TEST_STORAGE_DIR = "pdf_contents";
 
     @BeforeEach
     void setUp() {
@@ -76,6 +82,28 @@ class PDFIngestionServiceTest {
             "application/pdf",
             "%PDF-1.4\ntest content".getBytes()
         );
+    }
+
+    @AfterEach
+    void cleanup() {
+        try {
+            Path storagePath = Paths.get(TEST_STORAGE_DIR);
+            if (Files.exists(storagePath)) {
+                try (Stream<Path> paths = Files.walk(storagePath)) {
+                    paths.filter(path -> path.toString().endsWith(".json"))
+                         .forEach(path -> {
+                             try {
+                                 Files.delete(path);
+                                 System.out.println("Deleted test JSON file: " + path);
+                             } catch (IOException e) {
+                                 System.err.println("Failed to delete JSON file: " + path + " - " + e.getMessage());
+                             }
+                         });
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to clean up test JSON files: " + e.getMessage());
+        }
     }
 
     @Test

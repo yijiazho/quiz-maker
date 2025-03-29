@@ -1,8 +1,13 @@
 package com.quizmaker.controller;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -34,6 +39,7 @@ class PDFControllerTest {
 
     private MockMultipartFile pdfFile;
     private PDFContentDTO mockContent;
+    private static final String TEST_STORAGE_DIR = "pdf_contents";
 
     @BeforeEach
     void setUp() {
@@ -53,12 +59,34 @@ class PDFControllerTest {
                 .build();
     }
 
+    @AfterEach
+    void cleanup() {
+        try {
+            Path storagePath = Paths.get(TEST_STORAGE_DIR);
+            if (Files.exists(storagePath)) {
+                try (Stream<Path> paths = Files.walk(storagePath)) {
+                    paths.filter(path -> path.toString().endsWith(".json"))
+                         .forEach(path -> {
+                             try {
+                                 Files.delete(path);
+                                 System.out.println("Deleted test JSON file: " + path);
+                             } catch (IOException e) {
+                                 System.err.println("Failed to delete JSON file: " + path + " - " + e.getMessage());
+                             }
+                         });
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to clean up test JSON files: " + e.getMessage());
+        }
+    }
+
     @Test
     @WithMockUser
     void extractContent_ValidFile_ReturnsContent() throws Exception {
         when(pdfIngestionService.extractContent(any())).thenReturn(mockContent);
 
-        mockMvc.perform(multipart("/pdf/extract")
+        mockMvc.perform(multipart("/api/pdf/extract")
                 .file(pdfFile)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isOk())
@@ -74,7 +102,7 @@ class PDFControllerTest {
     void extractPageContent_ValidPage_ReturnsContent() throws Exception {
         when(pdfIngestionService.extractPageContent(any(), anyInt())).thenReturn(mockContent);
 
-        mockMvc.perform(multipart("/pdf/extract/page/1")
+        mockMvc.perform(multipart("/api/pdf/extract/page/1")
                 .file(pdfFile)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isOk())
@@ -91,7 +119,7 @@ class PDFControllerTest {
         when(pdfIngestionService.extractPageContent(any(), anyInt()))
             .thenThrow(new IllegalArgumentException("Invalid page number"));
 
-        mockMvc.perform(multipart("/pdf/extract/page/0")
+        mockMvc.perform(multipart("/api/pdf/extract/page/0")
                 .file(pdfFile)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isBadRequest())
@@ -108,7 +136,7 @@ class PDFControllerTest {
         when(pdfIngestionService.extractContent(any()))
             .thenThrow(new IOException("Processing error"));
 
-        mockMvc.perform(multipart("/pdf/extract")
+        mockMvc.perform(multipart("/api/pdf/extract")
                 .file(pdfFile)
                 .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isInternalServerError())
